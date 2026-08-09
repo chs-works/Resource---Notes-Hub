@@ -5,7 +5,7 @@ const subjects = [
         direct: true,
         modules: [
             { name: "Class Timetable", file: "pdfs/academic/timetable.pdf" },
-            { name: "Academic Calendar", file: "pdfs/academic/calendar.pdf" }
+            { name: "Academic Calendar", file: "pdfs/academic/calender.pdf" }
         ]
     },
     {
