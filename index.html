@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3rd Sem Notes Hub</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="menu-toggle" id="menuToggle">☰</div>
+        <div class="nav-title">Notes Hub</div>
+    </nav>
+
+    <div class="side-menu" id="sideMenu">
+        <div class="close-menu" id="closeMenu">✕</div>
+        <a href="#" onclick="showSubjects(); closeSideMenu();">🏠 Home</a>
+        <a href="#" onclick="showAbout(); closeSideMenu();">ℹ️ About</a>
+        <a href="https://docs.google.com/forms/d/e/1FAIpQLSdBfRMzsSuq6T0TeELkGljjl0BlaGLCOL-GqVWO8yKl15NRSg/viewform?usp=publish-editor"
+            target="_blank">📩 Request a Resource</a>
+        <a href="mailto:youremail@gmail.com">✉️ Contact / Feedback</a>
+    </div>
+
+    <div class="overlay" id="overlay"></div>
+
+    <header>
+        <h1>📚 Resource Hub</h1>
+        <p>(for 3rd Sem)</p>
+        <p>Quick access to notes, revision material, and videos</p>
+    </header>
+
+    <main>
+        <div id="page-header"></div>
+        <div id="subject-list"></div>
+    </main>
+
+    <script src="data.js"></script>
+    <script src="script.js"></script>
+    <footer class="site-footer">
+        <p>© 2026 Notes / Resource Hub — Built by Charan • All rights reserved</p>
+    </footer>
+</body>
+
+</html>
