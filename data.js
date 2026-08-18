@@ -53,8 +53,30 @@ const subjects = [
         ]
     },
     {
-        name: "Subject 5",
-        icon: "📓",
+        name: "DDCO",
+        icon: "icons/ddco.png",
+        modules: [
+            { name: "Module 1", teacherPdf: "pdfs/subject5/mod1-teacher.pdf", aiNotesPdf: "pdfs/subject5/mod1-ai-notes.pdf", youtubeLink: "" },
+            { name: "Module 2", teacherPdf: "pdfs/subject5/mod2-teacher.pdf", aiNotesPdf: "pdfs/subject5/mod2-ai-notes.pdf", youtubeLink: "" },
+            { name: "Module 3", teacherPdf: "pdfs/subject5/mod3-teacher.pdf", aiNotesPdf: "pdfs/subject5/mod3-ai-notes.pdf", youtubeLink: "" },
+            { name: "Module 4", teacherPdf: "pdfs/subject5/mod4-teacher.pdf", aiNotesPdf: "pdfs/subject5/mod4-ai-notes.pdf", youtubeLink: "" },
+            { name: "Module 5", teacherPdf: "pdfs/subject5/mod5-teacher.pdf", aiNotesPdf: "pdfs/subject5/mod5-ai-notes.pdf", youtubeLink: "" }
+        ]
+    },
+    {
+        name: "Data Analytics & Visualization",
+        icon: "icons/monitor.png",
+        modules: [
+            { name: "Module 1", teacherPdf: "pdfs/subject5/mod1-teacher.pdf", aiNotesPdf: "pdfs/subject5/mod1-ai-notes.pdf", youtubeLink: "" },
+            { name: "Module 2", teacherPdf: "pdfs/subject5/mod2-teacher.pdf", aiNotesPdf: "pdfs/subject5/mod2-ai-notes.pdf", youtubeLink: "" },
+            { name: "Module 3", teacherPdf: "pdfs/subject5/mod3-teacher.pdf", aiNotesPdf: "pdfs/subject5/mod3-ai-notes.pdf", youtubeLink: "" },
+            { name: "Module 4", teacherPdf: "pdfs/subject5/mod4-teacher.pdf", aiNotesPdf: "pdfs/subject5/mod4-ai-notes.pdf", youtubeLink: "" },
+            { name: "Module 5", teacherPdf: "pdfs/subject5/mod5-teacher.pdf", aiNotesPdf: "pdfs/subject5/mod5-ai-notes.pdf", youtubeLink: "" }
+        ]
+    },
+    {
+        name: "IDT - II",
+        icon: "icons/idt.png",
         modules: [
             { name: "Module 1", teacherPdf: "pdfs/subject5/mod1-teacher.pdf", aiNotesPdf: "pdfs/subject5/mod1-ai-notes.pdf", youtubeLink: "" },
             { name: "Module 2", teacherPdf: "pdfs/subject5/mod2-teacher.pdf", aiNotesPdf: "pdfs/subject5/mod2-ai-notes.pdf", youtubeLink: "" },
