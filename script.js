@@ -24,14 +24,41 @@ function showAbout() {
     subjectListDiv.innerHTML = `
         <div style="grid-column: 1 / -1; text-align:center; padding: 20px;">
             <h2>About This Hub</h2>
-            <p style="margin-top:12px; color:#c1ff; max-width:500px; margin-inline:auto;">
+            <p style="margin-top:12px; color:#5c5578; max-width:500px; margin-inline:auto;">
                 A central place for 3rd Sem notes, quick revision material, and video links — 
                 built to save you from searching WhatsApp and Moodle before exams.
-                This page is mainly buil for the 
+                This page is mainly built for the 
                 Students pursuing Computer Science Engineering @ The National Institute of Engineering.
             </p>
         </div>
     `;
+}
+
+// Reusable: prevents footer button clicks (download/share) from also triggering
+// the parent card's "open PDF" click, and wires up the actual share logic.
+function bindResourceCardFooter(card, shareLink) {
+    card.querySelectorAll(".footer-btn").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+        });
+    });
+
+    const shareBtn = card.querySelector(".share-btn");
+    if (shareBtn) {
+        shareBtn.addEventListener("click", () => {
+            const fullLink = window.location.origin + "/" + shareLink;
+
+            if (navigator.share) {
+                navigator.share({
+                    title: "Check out this resource",
+                    url: fullLink
+                });
+            } else {
+                navigator.clipboard.writeText(fullLink);
+                alert("Link copied! You can paste and send it.");
+            }
+        });
+    }
 }
 
 function showSubjects() {
@@ -52,11 +79,9 @@ function showSubjects() {
                 showModules(subject);
             }
         });
-        subjectListDiv.appendChild(subjectCard);   // ✅ moved inside
+        subjectListDiv.appendChild(subjectCard);
     });
 }
-
-
 
 function showModules(subject) {
     pageHeaderDiv.innerHTML = "";
@@ -71,6 +96,28 @@ function showModules(subject) {
     const heading = document.createElement("h2");
     heading.textContent = subject.name;
     pageHeaderDiv.appendChild(heading);
+
+    // Syllabus box — full-width rectangle, opens directly like Timetable/Calendar
+    // (not styled like a module card, and click does NOT go to showResources)
+    if (subject.syllabus) {
+        const syllabusBox = document.createElement("div");
+        syllabusBox.className = "resource-card syllabus-card";
+        syllabusBox.innerHTML = `
+            <div class="resource-main">
+                <div class="subject-icon">📘</div>
+                <div class="subject-name">Syllabus</div>
+            </div>
+            <div class="resource-footer">
+                <a href="${subject.syllabus}" download class="footer-btn" title="Download">⬇️</a>
+                <button class="footer-btn share-btn" title="Share" data-link="${subject.syllabus}">📤</button>
+            </div>
+        `;
+        syllabusBox.addEventListener("click", () => {
+            window.open(subject.syllabus, "_blank");
+        });
+        subjectListDiv.appendChild(syllabusBox);
+        bindResourceCardFooter(syllabusBox, subject.syllabus);
+    }
 
     subject.modules.forEach((module) => {
         const moduleCard = document.createElement("div");
@@ -119,6 +166,7 @@ function showResources(module, subject) {
         window.open(module.teacherPdf, "_blank");
     });
     subjectListDiv.appendChild(teacherBox);
+    bindResourceCardFooter(teacherBox, module.teacherPdf);
 
     const aiBox = document.createElement("div");
     aiBox.className = "resource-card";
@@ -136,6 +184,7 @@ function showResources(module, subject) {
         window.open(module.aiNotesPdf, "_blank");
     });
     subjectListDiv.appendChild(aiBox);
+    bindResourceCardFooter(aiBox, module.aiNotesPdf);
 
     const ytBox = document.createElement("a");
     ytBox.href = module.youtubeLink;
@@ -146,37 +195,8 @@ function showResources(module, subject) {
         <div class="subject-name">Watch Video</div>
     `;
     subjectListDiv.appendChild(ytBox);
-    // Prevent the download button click from also triggering the parent card's link
-    document.querySelectorAll(".download-btn").forEach((btn) => {
-        btn.addEventListener("click", (e) => {
-            e.stopPropagation();
-        });
-    });
-    // Stop footer button clicks from also opening the PDF (card click)
-    document.querySelectorAll(".footer-btn").forEach((btn) => {
-        btn.addEventListener("click", (e) => {
-            e.stopPropagation();
-        });
-    });
-
-    // Share button logic
-    document.querySelectorAll(".share-btn").forEach((btn) => {
-        btn.addEventListener("click", () => {
-            const link = btn.getAttribute("data-link");
-            const fullLink = window.location.origin + "/" + link;
-
-            if (navigator.share) {
-                navigator.share({
-                    title: "Check out this resource",
-                    url: fullLink
-                });
-            } else {
-                navigator.clipboard.writeText(fullLink);
-                alert("Link copied! You can paste and send it.");
-            }
-        });
-    });
 }
+
 function showDirectResources(subject) {
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = "";
@@ -208,6 +228,7 @@ function showDirectResources(subject) {
             window.open(item.file, "_blank");
         });
         subjectListDiv.appendChild(box);
+        bindResourceCardFooter(box, item.file);
     });
 }
 

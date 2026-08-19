@@ -294,3 +294,43 @@ main {
 .subject-card.long-name .subject-name {
     font-size: 0.85em;
 }
+
+/* Syllabus card - full-width rectangle, distinct from square module/resource cards */
+.syllabus-card {
+    grid-column: 1 / -1;
+    aspect-ratio: unset;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: space-between;
+    padding: 0;
+}
+
+.syllabus-card .resource-main {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 14px;
+    padding: 16px 20px;
+}
+
+.syllabus-card .subject-icon {
+    font-size: 30px;
+}
+
+.syllabus-card .subject-name {
+    font-size: 16px;
+    text-align: left;
+    padding: 0;
+}
+
+.syllabus-card .resource-footer {
+    border-top: none;
+    border-left: 1px solid rgba(120, 100, 200, 0.2);
+    flex-direction: row;
+}
+
+.syllabus-card .footer-btn {
+    padding: 0 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
