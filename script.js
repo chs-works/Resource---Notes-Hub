@@ -18,8 +18,61 @@ function closeSideMenu() {
 closeMenu.addEventListener("click", closeSideMenu);
 overlay.addEventListener("click", closeSideMenu);
 
+// ---------------------------------------------------------------------
+// History / back-button handling
+//
+// The app is a single HTML page that just swaps innerHTML around, so by
+// default the phone's back button has nothing to "go back" to and closes
+// the whole app. To fix this, every navigation function pushes a history
+// entry describing what's on screen. When the back button fires a
+// popstate event, we read that state and re-render the right view instead
+// of letting the browser close the page.
+//
+// Each nav function takes an optional `fromHistory` flag - true means
+// "I'm being called because of a back/forward action, don't push a new
+// history entry" (avoids double-pushing / broken forward navigation).
+// ---------------------------------------------------------------------
+
+window.addEventListener("popstate", (e) => {
+    const state = e.state;
+
+    if (!state || state.view === "subjects") {
+        showSubjects(true);
+        return;
+    }
+
+    if (state.view === "about") {
+        showAbout(true);
+        return;
+    }
+
+    if (state.view === "modules") {
+        const subject = subjects.find((s) => s.name === state.subjectName);
+        if (subject) showModules(subject, true);
+        else showSubjects(true);
+        return;
+    }
+
+    if (state.view === "resources") {
+        const subject = subjects.find((s) => s.name === state.subjectName);
+        const module = subject && subject.modules.find((m) => m.name === state.moduleName);
+        if (subject && module) showResources(module, subject, true);
+        else showSubjects(true);
+        return;
+    }
+
+    if (state.view === "direct") {
+        const subject = subjects.find((s) => s.name === state.subjectName);
+        if (subject) showDirectResources(subject, true);
+        else showSubjects(true);
+        return;
+    }
+
+    showSubjects(true);
+});
+
 // Simple About page
-function showAbout() {
+function showAbout(fromHistory) {
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = `
         <div style="grid-column: 1 / -1; text-align:center; padding: 20px;">
@@ -27,11 +80,15 @@ function showAbout() {
             <p style="margin-top:12px; color:#5c5578; max-width:500px; margin-inline:auto;">
                 A central place for 3rd Sem notes, quick revision material, and video links — 
                 built to save you from searching WhatsApp and Moodle before exams.
-                This page is mainly built for the 
+                This page is mainly buil for the 
                 Students pursuing Computer Science Engineering @ The National Institute of Engineering.
             </p>
         </div>
     `;
+
+    if (!fromHistory) {
+        history.pushState({ view: "about" }, "");
+    }
 }
 
 // Reusable: prevents footer button clicks (download/share) from also triggering
@@ -46,7 +103,7 @@ function bindResourceCardFooter(card, shareLink) {
     const shareBtn = card.querySelector(".share-btn");
     if (shareBtn) {
         shareBtn.addEventListener("click", () => {
-            const fullLink = window.location.origin + "/" + shareLink;
+            const fullLink = new URL(shareLink, window.location.href).href;
 
             if (navigator.share) {
                 navigator.share({
@@ -61,9 +118,13 @@ function bindResourceCardFooter(card, shareLink) {
     }
 }
 
-function showSubjects() {
+function showSubjects(fromHistory) {
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = "";
+
+    if (!fromHistory) {
+        history.pushState({ view: "subjects" }, "");
+    }
 
     subjects.forEach((subject) => {
         const subjectCard = document.createElement("div");
@@ -83,14 +144,20 @@ function showSubjects() {
     });
 }
 
-function showModules(subject) {
+function showModules(subject, fromHistory) {
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = "";
+
+    if (!fromHistory) {
+        history.pushState({ view: "modules", subjectName: subject.name }, "");
+    }
 
     const backBtn = document.createElement("button");
     backBtn.className = "back-btn";
     backBtn.innerHTML = "⬅️ Back to Subjects";
-    backBtn.addEventListener("click", showSubjects);
+    backBtn.addEventListener("click", () => {
+        history.back();
+    });
     pageHeaderDiv.appendChild(backBtn);
 
     const heading = document.createElement("h2");
@@ -133,15 +200,19 @@ function showModules(subject) {
     });
 }
 
-function showResources(module, subject) {
+function showResources(module, subject, fromHistory) {
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = "";
+
+    if (!fromHistory) {
+        history.pushState({ view: "resources", subjectName: subject.name, moduleName: module.name }, "");
+    }
 
     const backBtn = document.createElement("button");
     backBtn.className = "back-btn";
     backBtn.innerHTML = "⬅️ Back to Modules";
     backBtn.addEventListener("click", () => {
-        showModules(subject);
+        history.back();
     });
     pageHeaderDiv.appendChild(backBtn);
 
@@ -197,14 +268,20 @@ function showResources(module, subject) {
     subjectListDiv.appendChild(ytBox);
 }
 
-function showDirectResources(subject) {
+function showDirectResources(subject, fromHistory) {
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = "";
+
+    if (!fromHistory) {
+        history.pushState({ view: "direct", subjectName: subject.name }, "");
+    }
 
     const backBtn = document.createElement("button");
     backBtn.className = "back-btn";
     backBtn.innerHTML = "⬅️ Back to Subjects";
-    backBtn.addEventListener("click", showSubjects);
+    backBtn.addEventListener("click", () => {
+        history.back();
+    });
     pageHeaderDiv.appendChild(backBtn);
 
     const heading = document.createElement("h2");
@@ -232,8 +309,10 @@ function showDirectResources(subject) {
     });
 }
 
-// Start on the subjects page
-showSubjects();
+// Start on the subjects page (replace so there's no dangling "before app" history entry)
+history.replaceState({ view: "subjects" }, "");
+showSubjects(true);
+
 // Make tap animation reliable on mobile devices
 document.addEventListener("touchstart", function () { }, { passive: true });
 
