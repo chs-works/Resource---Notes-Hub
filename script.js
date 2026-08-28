@@ -22,6 +22,59 @@ const menuToggle = document.getElementById("menuToggle");
 const closeMenu = document.getElementById("closeMenu");
 const sideMenu = document.getElementById("sideMenu");
 const overlay = document.getElementById("overlay");
+const themeToggle = document.getElementById("themeToggle");
+const homeLink = document.getElementById("homeLink");
+const aboutLink = document.getElementById("aboutLink");
+const studyLink = document.getElementById("studyLink");
+
+// ---------------------------------------------------------------------
+// Theme switcher
+// Light mode is the default. The selected theme is remembered on this device.
+// ---------------------------------------------------------------------
+function applyTheme(theme) {
+    const dark = theme === "dark";
+    document.body.classList.toggle("dark-mode", dark);
+    if (themeToggle) {
+        themeToggle.textContent = dark ? "☀️" : "🌙";
+        themeToggle.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+        themeToggle.title = dark ? "Switch to light mode" : "Switch to dark mode";
+    }
+}
+
+const savedTheme = localStorage.getItem("resourceHubTheme") || "light";
+applyTheme(savedTheme);
+
+if (themeToggle) {
+    themeToggle.addEventListener("click", () => {
+        const nextTheme = document.body.classList.contains("dark-mode") ? "light" : "dark";
+        localStorage.setItem("resourceHubTheme", nextTheme);
+        applyTheme(nextTheme);
+    });
+}
+
+if (homeLink) {
+    homeLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        showSubjects();
+        closeSideMenu();
+    });
+}
+
+if (aboutLink) {
+    aboutLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        showAbout();
+        closeSideMenu();
+    });
+}
+
+if (studyLink) {
+    studyLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        showMyStudy();
+        closeSideMenu();
+    });
+}
 
 menuToggle.addEventListener("click", () => {
     sideMenu.classList.add("open");
@@ -64,16 +117,18 @@ async function loadSubjectsFromSupabase() {
     }
 
     return data.map((row) => ({
+        id: row.id,
         name: row.name,
-        icon: row.icon,
+        icon: row.icon || "📚",
         direct: row.direct,
         syllabus: row.syllabus || undefined,
         modules: (row.modules || [])
             .sort((a, b) => a.id - b.id)
             .map((m) =>
                 row.direct
-                    ? { name: m.name, file: m.file_url }
+                    ? { id: m.id, name: m.name, file: m.file_url }
                     : {
+                        id: m.id,
                         name: m.name,
                         teacherPdf: m.teacher_pdf_url,
                         aiNotesPdf: m.ai_notes_pdf_url,
@@ -81,6 +136,402 @@ async function loadSubjectsFromSupabase() {
                     }
             )
     }));
+}
+
+
+// ---------------------------------------------------------------------
+// Study features: progress, bookmarks, personal notes and AI assistant
+// Stored locally so these features work without adding new database tables.
+// ---------------------------------------------------------------------
+const STORAGE_KEYS = {
+    progress: "resourceHubProgress",
+    bookmarks: "resourceHubBookmarks",
+    notes: "resourceHubNotes",
+    recent: "resourceHubRecentlyViewed"
+};
+
+function readStore(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
+    catch { return fallback; }
+}
+function writeStore(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
+function moduleKey(subject, module) { return `${subject.id || subject.name}::${module.id || module.name}`; }
+function resourceKey(subject, module, type) { return `${subject.id || subject.name}::${module.id || module.name}::${type}`; }
+function isCompleted(subject, module) { return !!readStore(STORAGE_KEYS.progress, {})[moduleKey(subject, module)]; }
+function setCompleted(subject, module, value) {
+    const data = readStore(STORAGE_KEYS.progress, {});
+    const key = moduleKey(subject, module);
+    if (value) data[key] = true; else delete data[key];
+    writeStore(STORAGE_KEYS.progress, data);
+}
+function isBookmarked(subject, module, type) {
+    return !!readStore(STORAGE_KEYS.bookmarks, {})[resourceKey(subject, module, type)];
+}
+function toggleBookmark(subject, module, type) {
+    const data = readStore(STORAGE_KEYS.bookmarks, {});
+    const key = resourceKey(subject, module, type);
+    data[key] ? delete data[key] : data[key] = {
+        subjectId: subject.id, subjectName: subject.name,
+        moduleId: module.id, moduleName: module.name, type,
+        savedAt: Date.now()
+    };
+    writeStore(STORAGE_KEYS.bookmarks, data);
+}
+function getNotes(subject, module) {
+    return readStore(STORAGE_KEYS.notes, {})[moduleKey(subject, module)] || "";
+}
+function saveNotes(subject, module, text) {
+    const data = readStore(STORAGE_KEYS.notes, {});
+    data[moduleKey(subject, module)] = text;
+    writeStore(STORAGE_KEYS.notes, data);
+}
+function recordRecentlyViewed(subject, module) {
+    const key = moduleKey(subject, module);
+    let items = readStore(STORAGE_KEYS.recent, []);
+    items = items.filter(item => item.key !== key);
+    items.unshift({
+        key,
+        subjectId: subject.id,
+        subjectName: subject.name,
+        moduleId: module.id,
+        moduleName: module.name,
+        viewedAt: Date.now()
+    });
+    writeStore(STORAGE_KEYS.recent, items.slice(0, 8));
+}
+
+function getRecentlyViewed() {
+    return readStore(STORAGE_KEYS.recent, []);
+}
+
+function subjectProgress(subject) {
+    const modules = subject.modules || [];
+    if (!modules.length) return 0;
+    return Math.round(modules.filter(m => isCompleted(subject, m)).length / modules.length * 100);
+}
+function showProgressPill(subject) {
+    const pct = subjectProgress(subject);
+    return `<div class="progress-mini"><span>${pct}% complete</span><div><i style="width:${pct}%"></i></div></div>`;
+}
+
+function showMyStudy(fromHistory) {
+    pageHeaderDiv.innerHTML = "";
+    subjectListDiv.innerHTML = `
+        <section class="study-dashboard">
+            <div class="study-dashboard-head">
+                <button class="back-btn" id="studyBack">⬅️ Back to Subjects</button>
+                <div><h2>My Study</h2><p>Your progress, bookmarks and personal notes are saved on this device.</p></div>
+            </div>
+            <div class="study-summary" id="studySummary"></div>
+            <div class="study-section"><h3>📊 Subject Progress</h3><div id="studyProgressList"></div></div>
+            <div class="study-section"><h3>⭐ Bookmarked Resources</h3><div id="bookmarkList"></div></div>
+            <div class="study-section"><h3>🕐 Recently Viewed</h3><div id="recentList"></div></div>
+            <div class="study-section"><h3>📝 Personal Notes</h3><div id="personalNotesList"></div></div>
+        </section>`;
+    document.getElementById("studyBack")?.addEventListener("click", () => history.back());
+
+    const allModules = subjects.flatMap(s => (s.modules || []).map(m => ({ s, m })));
+    const done = allModules.filter(({ s, m }) => isCompleted(s, m)).length;
+    const bookmarks = Object.values(readStore(STORAGE_KEYS.bookmarks, {}));
+    const notes = Object.entries(readStore(STORAGE_KEYS.notes, {})).filter(([, v]) => v.trim());
+    const recent = getRecentlyViewed();
+    document.getElementById("studySummary").innerHTML = `
+        <div><strong>${done}</strong><span>Modules completed</span></div>
+        <div><strong>${bookmarks.length}</strong><span>Bookmarks</span></div>
+        <div><strong>${notes.length}</strong><span>Saved notes</span></div>
+        <div><strong>${recent.length}</strong><span>Recently viewed</span></div>`;
+    document.getElementById("studyProgressList").innerHTML = subjects.map(s => `
+        <div class="study-row"><div><b>${s.name}</b>${showProgressPill(s)}</div><span>${subjectProgress(s)}%</span></div>`).join("");
+
+    const bookmarkList = document.getElementById("bookmarkList");
+    bookmarkList.innerHTML = bookmarks.length ? bookmarks.map(b => `
+        <button class="bookmark-row" data-subject="${b.subjectId}" data-module="${b.moduleId}" data-type="${b.type}">
+            <span>⭐</span><span><b>${b.moduleName}</b><small>${b.subjectName} • ${b.type}</small></span><span>›</span>
+        </button>`).join("") : `<p class="empty-state">No bookmarks yet. Open a module and tap ⭐ on a resource.</p>`;
+    bookmarkList.querySelectorAll(".bookmark-row").forEach(btn => btn.addEventListener("click", () => {
+        const s = subjects.find(x => String(x.id) === btn.dataset.subject);
+        const m = s?.modules.find(x => String(x.id) === btn.dataset.module);
+        if (s && m) showResources(m, s);
+    }));
+
+    const recentList = document.getElementById("recentList");
+    recentList.innerHTML = recent.length ? recent.map(item => `
+        <button class="bookmark-row" data-subject="${item.subjectId}" data-module="${item.moduleId}">
+            <span>🕐</span><span><b>${item.moduleName}</b><small>${item.subjectName} • ${new Date(item.viewedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</small></span><span>›</span>
+        </button>`).join("") : `<p class="empty-state">No modules viewed yet. Open a module and it will appear here.</p>`;
+    recentList.querySelectorAll(".bookmark-row").forEach(btn => btn.addEventListener("click", () => {
+        const s = subjects.find(x => String(x.id) === btn.dataset.subject);
+        const m = s?.modules.find(x => String(x.id) === btn.dataset.module);
+        if (s && m) showResources(m, s);
+    }));
+
+    const notesList = document.getElementById("personalNotesList");
+    notesList.innerHTML = notes.length ? notes.map(([key, text]) => {
+        const [sid, mid] = key.split("::");
+        const s = subjects.find(x => String(x.id || x.name) === sid);
+        const m = s?.modules.find(x => String(x.id || x.name) === mid);
+        return `<button class="bookmark-row" data-subject="${s?.id}" data-module="${m?.id}"><span>📝</span><span><b>${m?.name || "Module"}</b><small>${s?.name || "Subject"} • ${text.slice(0, 70)}${text.length > 70 ? '…' : ''}</small></span><span>›</span></button>`;
+    }).join("") : `<p class="empty-state">No personal notes yet. Open a module to add one.</p>`;
+    notesList.querySelectorAll(".bookmark-row").forEach(btn => btn.addEventListener("click", () => {
+        const s = subjects.find(x => String(x.id) === btn.dataset.subject);
+        const m = s?.modules.find(x => String(x.id) === btn.dataset.module);
+        if (s && m) showResources(m, s);
+    }));
+
+    if (!fromHistory) history.pushState({ view: "study" }, "", "#study");
+}
+
+async function askAI(question, subject, module) {
+    const { data, error } = await supabaseClient.functions.invoke(
+        "ai-assistant",
+        {
+            body: {
+                question: question,
+                subject: subject.name,
+                module: module.name
+            }
+        }
+    );
+
+    if (error) {
+        console.error("AI Function Error:", error);
+        throw error;
+    }
+
+    if (!data || !data.answer) {
+        throw new Error("No answer received from AI.");
+    }
+
+    return data.answer;
+}
+
+
+function openAIStudyAssistant(module, subject) {
+    const modal = document.createElement("div");
+
+    modal.className = "modal-backdrop";
+
+    modal.innerHTML = `
+        <div class="ai-modal">
+
+            <button class="modal-close" aria-label="Close">
+                ✕
+            </button>
+
+            <div class="ai-title">
+                🤖 AI Study Assistant
+            </div>
+
+            <p class="ai-subtitle">
+                ${subject.name} • ${module.name}
+            </p>
+
+            <div class="ai-actions">
+
+                <button data-action="explain">
+                    Explain simply
+                </button>
+
+                <button data-action="summary">
+                    Quick summary
+                </button>
+
+                <button data-action="questions">
+                    Important questions
+                </button>
+
+            </div>
+
+            <div class="ai-response">
+                Choose what you want help with.
+            </div>
+
+            <div class="ai-chat-row">
+
+                <input
+                    id="aiInput"
+                    placeholder="Ask something about this module..."
+                >
+
+                <button id="aiSend">
+                    Ask
+                </button>
+
+            </div>
+
+            <small class="ai-note">
+                🤖 AI Study Assistant
+            </small>
+
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const response = modal.querySelector(".ai-response");
+    const input = modal.querySelector("#aiInput");
+    const sendButton = modal.querySelector("#aiSend");
+
+
+    // Show AI response
+    const showAIResponse = async (question) => {
+
+        response.innerHTML = `
+            <div class="ai-loading">
+                🤔 Thinking...
+            </div>
+        `;
+
+        try {
+
+            const answer = await askAI(
+                question,
+                subject,
+                module
+            );
+
+            response.innerHTML = answer;
+
+        } catch (error) {
+
+            console.error(error);
+
+            response.innerHTML = `
+                <div class="ai-error">
+                    ❌ Unable to get an AI response.
+                    <br><br>
+                    Please try again.
+                </div>
+            `;
+        }
+    };
+
+
+    // Quick action buttons
+    modal
+        .querySelectorAll(".ai-actions button")
+        .forEach(button => {
+
+            button.addEventListener("click", () => {
+
+                const action = button.dataset.action;
+
+                let question = "";
+
+                if (action === "explain") {
+
+                    question = `
+                    Explain the module "${module.name}"
+                    from "${subject.name}" in very simple
+                    student-friendly language.
+
+                    Give:
+                    1. Basic idea
+                    2. Important concepts
+                    3. Simple examples
+                    4. Important points for exams
+                    `;
+
+                }
+
+                else if (action === "summary") {
+
+                    question = `
+                    Give me a concise study summary
+                    of "${module.name}" from
+                    "${subject.name}".
+
+                    Include the most important
+                    concepts, definitions, formulas
+                    and exam points.
+                    `;
+
+                }
+
+                else if (action === "questions") {
+
+                    question = `
+                    Create important exam questions
+                    for "${module.name}" from
+                    "${subject.name}".
+
+                    Include:
+                    - Short-answer questions
+                    - Long-answer questions
+                    - Important concepts
+                    - Important problems if applicable
+                    `;
+
+                }
+
+                showAIResponse(question);
+
+            });
+
+        });
+
+
+    // Ask custom question
+    const askQuestion = () => {
+
+        const question = input.value.trim();
+
+        if (!question) {
+            return;
+        }
+
+        input.value = "";
+
+        showAIResponse(question);
+
+    };
+
+
+    sendButton.addEventListener(
+        "click",
+        askQuestion
+    );
+
+
+    input.addEventListener(
+        "keydown",
+        event => {
+
+            if (event.key === "Enter") {
+                askQuestion();
+            }
+
+        }
+    );
+
+
+    // Close modal
+    modal
+        .querySelector(".modal-close")
+        .addEventListener("click", () => {
+
+            modal.remove();
+
+        });
+
+
+    // Close when clicking outside
+    modal.addEventListener("click", event => {
+
+        if (event.target === modal) {
+            modal.remove();
+        }
+
+    });
+
+}
+
+function addBookmarkButton(card, subject, module, type) {
+    const footer = card.querySelector(".resource-footer");
+    if (!footer) return;
+    const btn = document.createElement("button"); btn.className = "footer-btn bookmark-btn"; btn.title = "Bookmark"; btn.textContent = isBookmarked(subject, module, type) ? "⭐" : "☆";
+    btn.addEventListener("click", e => { e.stopPropagation(); toggleBookmark(subject, module, type); btn.textContent = isBookmarked(subject, module, type) ? "⭐" : "☆"; });
+    footer.appendChild(btn);
 }
 
 // ---------------------------------------------------------------------
@@ -108,6 +559,11 @@ window.addEventListener("popstate", (e) => {
 
     if (state.view === "about") {
         showAbout(true);
+        return;
+    }
+
+    if (state.view === "study") {
+        showMyStudy(true);
         return;
     }
 
@@ -140,19 +596,35 @@ window.addEventListener("popstate", (e) => {
 function showAbout(fromHistory) {
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = `
-        <div style="grid-column: 1 / -1; text-align:center; padding: 20px;">
-            <h2>About This Hub</h2>
-            <p style="margin-top:12px; color:#5c5578; max-width:500px; margin-inline:auto;">
-                A central place for 3rd Sem notes, quick revision material, and video links — 
-                built to save you from searching WhatsApp and Moodle before exams.
-                This page is mainly built for the 
-                Students pursuing Computer Science Engineering @ The National Institute of Engineering.
+        <section class="about-card">
+            <button class="back-btn about-back" id="aboutBackBtn" type="button">⬅️ Back to Subjects</button>
+            <div class="about-icon">📚</div>
+            <h2>About Resource Hub</h2>
+            <p>
+                Resource Hub is a simple central place for 3rd Semester notes,
+                revision material, syllabi, and useful video links. It is designed
+                to make study resources easy to find without searching through
+                WhatsApp or Moodle before exams.
             </p>
-        </div>
+            <p>
+                Built for students pursuing Computer Science Engineering at
+                The National Institute of Engineering.
+            </p>
+            <div class="about-features">
+                <div>📖<span>Notes & Modules</span></div>
+                <div>⚡<span>Quick Revision</span></div>
+                <div>▶️<span>Learning Videos</span></div>
+            </div>
+        </section>
     `;
 
+    const aboutBackBtn = document.getElementById("aboutBackBtn");
+    if (aboutBackBtn) {
+        aboutBackBtn.addEventListener("click", () => history.back());
+    }
+
     if (!fromHistory) {
-        history.pushState({ view: "about" }, "");
+        history.pushState({ view: "about" }, "", "#about");
     }
 }
 
@@ -183,33 +655,23 @@ function bindResourceCardFooter(card, shareLink) {
     }
 }
 
-// Safely renders a subject's icon. Falls back to a plain folder emoji
-// instead of crashing when icon is missing/null (e.g. a row added via
-// bulk SQL that didn't set an icon yet) — one incomplete row should never
-// take down the whole subjects list.
-function renderSubjectIcon(subject) {
-    const icon = subject.icon || "";
-    const isImage = icon.endsWith('.png') || icon.endsWith('.jpg') || icon.endsWith('.svg');
-    if (isImage) {
-        return `<img src="${icon}" alt="${subject.name}" style="width:60px;height:60px;object-fit:contain;">`;
-    }
-    return icon || "📁";
-}
-
 function showSubjects(fromHistory) {
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = "";
 
     if (!fromHistory) {
-        history.pushState({ view: "subjects" }, "");
+        history.pushState({ view: "subjects" }, "", "#subjects");
     }
 
     subjects.forEach((subject) => {
         const subjectCard = document.createElement("div");
         subjectCard.className = subject.name.length > 20 ? "subject-card long-name" : "subject-card";
+        const icon = subject.icon || "📚";
+        const isImage = typeof icon === "string" && (icon.endsWith('.png') || icon.endsWith('.jpg') || icon.endsWith('.jpeg') || icon.endsWith('.svg') || icon.endsWith('.webp'));
         subjectCard.innerHTML = `
-            <div class="subject-icon">${renderSubjectIcon(subject)}</div>
+            <div class="subject-icon">${isImage ? `<img src="${icon}" alt="${subject.name}" style="width:60px;height:60px;object-fit:contain;">` : icon}</div>
             <div class="subject-name">${subject.name}</div>
+            ${subject.direct ? "" : showProgressPill(subject)}
         `;
         subjectCard.addEventListener("click", () => {
             if (subject.direct) {
@@ -227,7 +689,7 @@ function showModules(subject, fromHistory) {
     subjectListDiv.innerHTML = "";
 
     if (!fromHistory) {
-        history.pushState({ view: "modules", subjectName: subject.name }, "");
+        history.pushState({ view: "modules", subjectName: subject.name }, "", "#modules");
     }
 
     const backBtn = document.createElement("button");
@@ -270,9 +732,14 @@ function showModules(subject, fromHistory) {
         moduleCard.innerHTML = `
             <div class="subject-icon">📖</div>
             <div class="subject-name">${module.name}</div>
+            <label class="complete-check" title="Mark module complete" onclick="event.stopPropagation()">
+                <input type="checkbox" ${isCompleted(subject, module) ? "checked" : ""}> <span>${isCompleted(subject, module) ? "Completed" : "Mark complete"}</span>
+            </label>
         `;
-        moduleCard.addEventListener("click", () => {
-            showResources(module, subject);
+        moduleCard.addEventListener("click", () => { showResources(module, subject); });
+        moduleCard.querySelector("input").addEventListener("change", (e) => {
+            setCompleted(subject, module, e.target.checked);
+            showModules(subject, true);
         });
         subjectListDiv.appendChild(moduleCard);
     });
@@ -280,10 +747,12 @@ function showModules(subject, fromHistory) {
 
 function showResources(module, subject, fromHistory) {
     pageHeaderDiv.innerHTML = "";
+
+    if (!fromHistory) recordRecentlyViewed(subject, module);
     subjectListDiv.innerHTML = "";
 
     if (!fromHistory) {
-        history.pushState({ view: "resources", subjectName: subject.name, moduleName: module.name }, "");
+        history.pushState({ view: "resources", subjectName: subject.name, moduleName: module.name }, "", "#resources");
     }
 
     const backBtn = document.createElement("button");
@@ -344,6 +813,26 @@ function showResources(module, subject, fromHistory) {
         <div class="subject-name">Watch Video</div>
     `;
     subjectListDiv.appendChild(ytBox);
+
+    // Study tools panel
+    const tools = document.createElement("div");
+    tools.className = "study-tools";
+    tools.innerHTML = `
+        <div class="study-tool-head"><div><h3>Study Tools</h3><p>${isCompleted(subject, module) ? "Module completed ✓" : "Mark this module complete when you're done."}</p></div><label class="complete-toggle"><input type="checkbox" ${isCompleted(subject, module) ? "checked" : ""}> Completed</label></div>
+        <div class="study-tool-buttons"><button id="aiBtn">🤖 AI Assistant</button></div>
+        <div class="notes-box"><h4>📝 My Personal Notes</h4><textarea id="personalNote" placeholder="Write your own formulas, reminders or important points..."></textarea><button id="savePersonalNote">Save Note</button><span id="noteSaved"></span></div>`;
+    subjectListDiv.appendChild(tools);
+    tools.querySelector(".complete-toggle input").addEventListener("change", e => { setCompleted(subject, module, e.target.checked); showResources(module, subject, true); });
+    tools.querySelector("#aiBtn").addEventListener("click", () => openAIStudyAssistant(module, subject));
+    tools.querySelector("#personalNote").value = getNotes(subject, module);
+    tools.querySelector("#savePersonalNote").addEventListener("click", () => { saveNotes(subject, module, tools.querySelector("#personalNote").value); tools.querySelector("#noteSaved").textContent = "Saved ✓"; setTimeout(() => tools.querySelector("#noteSaved").textContent = "", 1500); });
+
+    addBookmarkButton(teacherBox, subject, module, "Teacher's Notes");
+    addBookmarkButton(aiBox, subject, module, "Quick Revision Notes");
+    // video bookmark is represented by the card itself; add a simple local bookmark below the link
+    const videoBookmark = document.createElement("button"); videoBookmark.className = "video-bookmark"; videoBookmark.textContent = isBookmarked(subject, module, "Video") ? "⭐ Saved" : "☆ Save Video";
+    videoBookmark.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); toggleBookmark(subject, module, "Video"); videoBookmark.textContent = isBookmarked(subject, module, "Video") ? "⭐ Saved" : "☆ Save Video"; });
+    ytBox.appendChild(videoBookmark);
 }
 
 function showDirectResources(subject, fromHistory) {
@@ -351,7 +840,7 @@ function showDirectResources(subject, fromHistory) {
     subjectListDiv.innerHTML = "";
 
     if (!fromHistory) {
-        history.pushState({ view: "direct", subjectName: subject.name }, "");
+        history.pushState({ view: "direct", subjectName: subject.name }, "", "#direct");
     }
 
     const backBtn = document.createElement("button");
@@ -403,7 +892,7 @@ async function init() {
 
     subjects = await loadSubjectsFromSupabase();
 
-    history.replaceState({ view: "subjects" }, "");
+    history.replaceState({ view: "subjects" }, "", "#subjects");
     showSubjects(true);
 }
 init();

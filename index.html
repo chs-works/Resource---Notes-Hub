@@ -21,12 +21,14 @@
     <nav class="navbar">
         <div class="menu-toggle" id="menuToggle">☰</div>
         <div class="nav-title">Notes Hub</div>
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">🌙</button>
     </nav>
 
     <div class="side-menu" id="sideMenu">
         <div class="close-menu" id="closeMenu">✕</div>
-        <a href="#" onclick="showSubjects(); closeSideMenu();">🏠 Home</a>
-        <a href="#" onclick="showAbout(); closeSideMenu();">ℹ️ About</a>
+        <a href="#" id="homeLink">🏠 Home</a>
+        <a href="#" id="aboutLink">ℹ️ About</a>
+        <a href="#" id="studyLink">📊 My Study</a>
         <a href="https://docs.google.com/forms/d/e/1FAIpQLSdBfRMzsSuq6T0TeELkGljjl0BlaGLCOL-GqVWO8yKl15NRSg/viewform?usp=publish-editor"
             target="_blank">📩 Request a Resource</a>
         <a href="mailto:youremail@gmail.com">✉️ Contact / Feedback</a>
