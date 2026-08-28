@@ -1,3 +1,20 @@
+// ---------------------------------------------------------------------
+// Supabase setup
+//
+// The publishable key below is safe to expose in frontend code — it only
+// allows what Row Level Security policies permit (currently: public read
+// access on subjects/modules, no write access). Never put a "secret" key
+// here.
+// ---------------------------------------------------------------------
+const SUPABASE_URL = "https://fdqrnhmkcqbmoquialgv.supabase.co";
+const SUPABASE_KEY = "sb_publishable_uL-TrR68TD2bk5kdnjKwjA_r60zC85R";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// `subjects` used to come from data.js as a hardcoded const array.
+// It's now populated at runtime from Supabase, so it starts empty and
+// gets filled in by loadSubjectsFromSupabase() before the app renders.
+let subjects = [];
+
 const subjectListDiv = document.getElementById("subject-list");
 const pageHeaderDiv = document.getElementById("page-header");
 // Side menu logic
@@ -17,6 +34,54 @@ function closeSideMenu() {
 }
 closeMenu.addEventListener("click", closeSideMenu);
 overlay.addEventListener("click", closeSideMenu);
+
+// ---------------------------------------------------------------------
+// Fetch subjects + modules from Supabase and reshape them into exactly
+// the same shape data.js used to provide, so every render function below
+// (showSubjects, showModules, showResources, showDirectResources) works
+// completely unchanged.
+//
+// Supabase column names -> old data.js field names:
+//   teacher_pdf_url  -> teacherPdf
+//   ai_notes_pdf_url -> aiNotesPdf
+//   youtube_link     -> youtubeLink
+//   file_url         -> file   (used when subject.direct is true)
+// ---------------------------------------------------------------------
+async function loadSubjectsFromSupabase() {
+    const { data, error } = await supabaseClient
+        .from("subjects")
+        .select("*, modules(*)")
+        .order("id", { ascending: true });
+
+    if (error) {
+        console.error("Failed to load subjects from Supabase:", error);
+        subjectListDiv.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align:center; padding: 30px;">
+                <p style="color:#5c5578;">Couldn't load resources right now. Please check your connection and try again.</p>
+            </div>
+        `;
+        return [];
+    }
+
+    return data.map((row) => ({
+        name: row.name,
+        icon: row.icon,
+        direct: row.direct,
+        syllabus: row.syllabus || undefined,
+        modules: (row.modules || [])
+            .sort((a, b) => a.id - b.id)
+            .map((m) =>
+                row.direct
+                    ? { name: m.name, file: m.file_url }
+                    : {
+                        name: m.name,
+                        teacherPdf: m.teacher_pdf_url,
+                        aiNotesPdf: m.ai_notes_pdf_url,
+                        youtubeLink: m.youtube_link || ""
+                    }
+            )
+    }));
+}
 
 // ---------------------------------------------------------------------
 // History / back-button handling
@@ -80,7 +145,7 @@ function showAbout(fromHistory) {
             <p style="margin-top:12px; color:#5c5578; max-width:500px; margin-inline:auto;">
                 A central place for 3rd Sem notes, quick revision material, and video links — 
                 built to save you from searching WhatsApp and Moodle before exams.
-                This page is mainly buil for the 
+                This page is mainly built for the 
                 Students pursuing Computer Science Engineering @ The National Institute of Engineering.
             </p>
         </div>
@@ -309,9 +374,26 @@ function showDirectResources(subject, fromHistory) {
     });
 }
 
-// Start on the subjects page (replace so there's no dangling "before app" history entry)
-history.replaceState({ view: "subjects" }, "");
-showSubjects(true);
+// ---------------------------------------------------------------------
+// App startup
+//
+// Show a loading message, fetch live data from Supabase, then render.
+// Replaces the old "history.replaceState(...); showSubjects(true);"
+// pair that used to run immediately against the hardcoded data.js array.
+// ---------------------------------------------------------------------
+async function init() {
+    subjectListDiv.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align:center; padding: 40px; color:#5c5578;">
+            Loading resources...
+        </div>
+    `;
+
+    subjects = await loadSubjectsFromSupabase();
+
+    history.replaceState({ view: "subjects" }, "");
+    showSubjects(true);
+}
+init();
 
 // Make tap animation reliable on mobile devices
 document.addEventListener("touchstart", function () { }, { passive: true });

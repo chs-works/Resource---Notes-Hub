@@ -45,7 +45,11 @@
         <div id="subject-list"></div>
     </main>
 
-    <script src="data.js"></script>
+    <!-- Supabase client library — must load before script.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- data.js is no longer used as the data source (script.js now fetches
+         live from Supabase) — keep the file in the repo as a backup/reference
+         if you like, just don't load it here. -->
     <script src="script.js"></script>
     <footer class="site-footer">
         <p>© 2026 Notes / Resource Hub — Built by Charan • All rights reserved</p>
