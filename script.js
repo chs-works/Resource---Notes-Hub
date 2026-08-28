@@ -183,6 +183,19 @@ function bindResourceCardFooter(card, shareLink) {
     }
 }
 
+// Safely renders a subject's icon. Falls back to a plain folder emoji
+// instead of crashing when icon is missing/null (e.g. a row added via
+// bulk SQL that didn't set an icon yet) — one incomplete row should never
+// take down the whole subjects list.
+function renderSubjectIcon(subject) {
+    const icon = subject.icon || "";
+    const isImage = icon.endsWith('.png') || icon.endsWith('.jpg') || icon.endsWith('.svg');
+    if (isImage) {
+        return `<img src="${icon}" alt="${subject.name}" style="width:60px;height:60px;object-fit:contain;">`;
+    }
+    return icon || "📁";
+}
+
 function showSubjects(fromHistory) {
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = "";
@@ -195,7 +208,7 @@ function showSubjects(fromHistory) {
         const subjectCard = document.createElement("div");
         subjectCard.className = subject.name.length > 20 ? "subject-card long-name" : "subject-card";
         subjectCard.innerHTML = `
-            <div class="subject-icon">${subject.icon.endsWith('.png') || subject.icon.endsWith('.jpg') || subject.icon.endsWith('.svg') ? `<img src="${subject.icon}" alt="${subject.name}" style="width:60px;height:60px;object-fit:contain;">` : subject.icon}</div>
+            <div class="subject-icon">${renderSubjectIcon(subject)}</div>
             <div class="subject-name">${subject.name}</div>
         `;
         subjectCard.addEventListener("click", () => {
