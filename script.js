@@ -314,7 +314,22 @@ async function askAI(question, subject, module) {
 
     if (error) {
         console.error("AI Function Error:", error);
-        throw new Error(error.message || "AI function failed.");
+
+        // Supabase's client library gives a generic "non-2xx status code"
+        // message by default and hides the actual response body. Try to
+        // pull the real error/details out of it so it's visible here
+        // instead of only in the Supabase dashboard logs.
+        let detail = error.message || "AI function failed.";
+        try {
+            if (error.context && typeof error.context.json === "function") {
+                const body = await error.context.json();
+                detail = body.details || body.error || detail;
+            }
+        } catch (_) {
+            // response wasn't JSON — fall back to the generic message
+        }
+
+        throw new Error(detail);
     }
 
     if (!data || !data.answer) {
@@ -332,10 +347,77 @@ async function askAI(question, subject, module) {
 // bottom-left of the viewport (only while a module's resources page is
 // open), which toggles a small anchored chat panel above it.
 // ---------------------------------------------------------------------
+// Custom AI Study Assistant icon, as inline SVG so it's crisp at any size
+// and uses the exact brand colors instead of a generic emoji. Two color
+// variants: white glyph for use on the gradient FAB button, and a
+// gradient-fill glyph for use on the light panel header.
+const AI_ICON_ON_GRADIENT = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+<line x1="50" y1="10" x2="50" y2="24" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+<circle cx="50" cy="6" r="6" fill="#ffffff"/>
+<rect x="20" y="24" width="60" height="52" rx="20" fill="#ffffff"/>
+<rect x="6" y="40" width="12" height="22" rx="6" fill="#ffffff" fill-opacity=".85"/>
+<rect x="82" y="40" width="12" height="22" rx="6" fill="#ffffff" fill-opacity=".85"/>
+<circle cx="38" cy="50" r="6" fill="#7c6fe0"/>
+<circle cx="62" cy="50" r="6" fill="#7c6fe0"/>
+<path d="M32 62 Q50 74 68 62" stroke="#7c6fe0" stroke-width="5" stroke-linecap="round" fill="none"/>
+</svg>`;
+
+const AI_ICON_ON_LIGHT = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+<defs><linearGradient id="aiIconGradPanel" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0%" stop-color="#a89cff"/><stop offset="100%" stop-color="#ffb3d1"/>
+</linearGradient></defs>
+<line x1="50" y1="10" x2="50" y2="24" stroke="url(#aiIconGradPanel)" stroke-width="5" stroke-linecap="round"/>
+<circle cx="50" cy="6" r="6" fill="url(#aiIconGradPanel)"/>
+<rect x="20" y="24" width="60" height="52" rx="20" fill="url(#aiIconGradPanel)"/>
+<rect x="6" y="40" width="12" height="22" rx="6" fill="url(#aiIconGradPanel)" fill-opacity=".85"/>
+<rect x="82" y="40" width="12" height="22" rx="6" fill="url(#aiIconGradPanel)" fill-opacity=".85"/>
+<circle cx="38" cy="50" r="6" fill="#ffffff"/>
+<circle cx="62" cy="50" r="6" fill="#ffffff"/>
+<path d="M32 62 Q50 74 68 62" stroke="#ffffff" stroke-width="5" stroke-linecap="round" fill="none"/>
+</svg>`;
+
 function removeAIWidget() {
     document.getElementById("aiFab")?.remove();
     document.getElementById("aiPanel")?.remove();
+    document.getElementById("aiGreeting")?.remove();
     document.removeEventListener("click", handleAIOutsideClick, true);
+}
+
+// Small speech-bubble greeting near the FAB. Shown once per page load
+// (resets on refresh) rather than once forever, so it reappears any time
+// the site is reloaded but doesn't repeat on every module you browse to
+// within the same session.
+let aiGreetingShownThisLoad = false;
+
+function maybeShowAIGreeting() {
+    if (aiGreetingShownThisLoad) return;
+
+    const bubble = document.createElement("div");
+    bubble.id = "aiGreeting";
+    bubble.className = "ai-greeting";
+    bubble.innerHTML = `
+        <button class="ai-greeting-close" type="button" aria-label="Dismiss">✕</button>
+        <p>👋 Hi! I'm your AI Study Assistant. Tap here if you need help with this module.</p>
+    `;
+    document.body.appendChild(bubble);
+    requestAnimationFrame(() => bubble.classList.add("show"));
+
+    const dismiss = () => {
+        aiGreetingShownThisLoad = true;
+        bubble.classList.remove("show");
+        setTimeout(() => bubble.remove(), 250);
+    };
+
+    bubble.addEventListener("click", (e) => {
+        if (e.target.closest(".ai-greeting-close")) {
+            dismiss();
+        } else {
+            dismiss();
+            document.getElementById("aiFab")?.click();
+        }
+    });
+
+    setTimeout(dismiss, 6000);
 }
 
 function renderAIFab(module, subject) {
@@ -347,9 +429,11 @@ function renderAIFab(module, subject) {
     fab.type = "button";
     fab.setAttribute("aria-label", "Open AI Study Assistant");
     fab.title = "AI Study Assistant";
-    fab.innerHTML = `<span class="ai-fab-icon">🤖</span>`;
+    fab.innerHTML = `<span class="ai-fab-icon">${AI_ICON_ON_GRADIENT}</span>`;
 
     fab.addEventListener("click", () => {
+        document.getElementById("aiGreeting")?.remove();
+        aiGreetingShownThisLoad = true;
         if (document.getElementById("aiPanel")) {
             closeAIPanel();
         } else {
@@ -358,6 +442,8 @@ function renderAIFab(module, subject) {
     });
 
     document.body.appendChild(fab);
+
+    setTimeout(() => maybeShowAIGreeting(), 700);
 }
 
 function closeAIPanel() {
@@ -385,7 +471,7 @@ function openAIPanel(module, subject) {
 
     panel.innerHTML = `
         <div class="ai-panel-header">
-            <div class="ai-panel-title"><span class="ai-panel-emoji">🤖</span> AI Study Assistant</div>
+            <div class="ai-panel-title"><span class="ai-panel-emoji">${AI_ICON_ON_LIGHT}</span> AI Study Assistant</div>
             <button class="ai-panel-close" type="button" aria-label="Close">✕</button>
         </div>
         <p class="ai-panel-subtitle">${subject.name} • ${module.name}</p>
