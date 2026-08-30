@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,27 +8,44 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="admin.css">
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/app-icon/logo-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="icons/app-icon/logo-16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="icons/app-icon/logo-180.png">
+    <meta name="theme-color" content="#7C6FE0">
     <meta name="robots" content="noindex, nofollow">
 </head>
+
 <body>
 
     <nav class="navbar">
         <div class="nav-title">🔐 Resource Hub — Admin</div>
-        <button class="theme-toggle" id="logoutBtn" type="button" style="display:none;">Log out</button>
+        <div class="navbar-actions">
+            <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to dark mode"
+                title="Switch to dark mode">🌙</button>
+            <button class="logout-btn" id="logoutBtn" type="button" style="display:none;">⏻ Log out</button>
+        </div>
     </nav>
 
     <main class="admin-main">
 
         <!-- LOGIN -->
         <section id="loginSection" class="admin-card login-card">
-            <h2>Admin Login</h2>
-            <p class="admin-hint">Log in with your admin email and password.</p>
+            <div class="login-icon">🔐</div>
+            <h2>Welcome back</h2>
+            <p class="login-subtitle">Sign in to manage Resource Hub</p>
             <form id="loginForm">
                 <label>Email</label>
-                <input type="email" id="loginEmail" required autocomplete="username">
+                <input type="email" id="loginEmail" required autocomplete="username" placeholder="you@example.com">
+
                 <label>Password</label>
-                <input type="password" id="loginPassword" required autocomplete="current-password">
-                <button type="submit" class="admin-btn primary">Log In</button>
+                <div class="password-wrap">
+                    <input type="password" id="loginPassword" required autocomplete="current-password"
+                        placeholder="••••••••">
+                    <button type="button" class="password-toggle" id="togglePassword" aria-label="Show password"
+                        title="Show password">👁</button>
+                </div>
+
+                <button type="submit" class="admin-btn primary full-width">Log In</button>
                 <p id="loginError" class="admin-error"></p>
             </form>
         </section>
@@ -70,4 +88,5 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="admin.js"></script>
 </body>
+
 </html>

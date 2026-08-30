@@ -131,7 +131,7 @@ ${question}
         },
 
         body: JSON.stringify({
-          model: "gpt-5.6-luna",
+          model: "gpt-5.6",
 
           input: [
             {

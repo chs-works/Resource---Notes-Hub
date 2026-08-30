@@ -21,8 +21,49 @@ const logoutBtn = document.getElementById("logoutBtn");
 const subjectsList = document.getElementById("subjectsList");
 const addSubjectForm = document.getElementById("addSubjectForm");
 const addSubjectStatus = document.getElementById("addSubjectStatus");
+const themeToggle = document.getElementById("themeToggle");
+const togglePasswordBtn = document.getElementById("togglePassword");
+const loginPasswordInput = document.getElementById("loginPassword");
 
 let subjectsCache = [];
+
+// ---------------------------------------------------------------------
+// Theme switcher
+// Uses the SAME localStorage key as the main site's script.js, so
+// switching theme here also applies next time you open index.html
+// (and vice versa) — they're on the same origin/device.
+// ---------------------------------------------------------------------
+function applyTheme(theme) {
+    const dark = theme === "dark";
+    document.body.classList.toggle("dark-mode", dark);
+    if (themeToggle) {
+        themeToggle.textContent = dark ? "☀️" : "🌙";
+        themeToggle.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+        themeToggle.title = dark ? "Switch to light mode" : "Switch to dark mode";
+    }
+}
+
+applyTheme(localStorage.getItem("resourceHubTheme") || "light");
+
+if (themeToggle) {
+    themeToggle.addEventListener("click", () => {
+        const nextTheme = document.body.classList.contains("dark-mode") ? "light" : "dark";
+        localStorage.setItem("resourceHubTheme", nextTheme);
+        applyTheme(nextTheme);
+    });
+}
+
+// ---------------------------------------------------------------------
+// Show / hide password on the login form
+// ---------------------------------------------------------------------
+if (togglePasswordBtn && loginPasswordInput) {
+    togglePasswordBtn.addEventListener("click", () => {
+        const showing = loginPasswordInput.type === "text";
+        loginPasswordInput.type = showing ? "password" : "text";
+        togglePasswordBtn.textContent = showing ? "👁" : "🙈";
+        togglePasswordBtn.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+    });
+}
 
 // ---------------------------------------------------------------------
 // Auth
@@ -96,6 +137,16 @@ async function loadDashboard() {
     renderSubjects();
 }
 
+// Same check used in the main site's script.js: if the icon field is a
+// path to an image file rather than an emoji, render it as an <img>
+// instead of printing the raw path as text.
+function iconHtml(icon) {
+    const value = icon || "📚";
+    const isImage = typeof value === "string" &&
+        (value.endsWith(".png") || value.endsWith(".jpg") || value.endsWith(".jpeg") || value.endsWith(".svg") || value.endsWith(".webp"));
+    return isImage ? `<img src="${value}" class="subject-icon-img" alt="" onerror="this.replaceWith(document.createTextNode('📚'))">` : value;
+}
+
 function renderSubjects() {
     if (!subjectsCache.length) {
         subjectsList.innerHTML = `<p class="admin-hint">No subjects yet — add one above.</p>`;
@@ -105,7 +156,7 @@ function renderSubjects() {
     subjectsList.innerHTML = subjectsCache.map(subject => `
         <div class="subject-row" data-subject-id="${subject.id}">
             <div class="subject-row-head" data-toggle="${subject.id}">
-                <b>${subject.icon || "📚"} ${subject.name}${subject.direct ? " (direct)" : ""}</b>
+                <b>${iconHtml(subject.icon)} ${subject.name}${subject.direct ? " (direct)" : ""}</b>
                 <div class="subject-row-actions">
                     <button class="admin-btn secondary small" data-edit-subject="${subject.id}">Edit</button>
                     <button class="admin-btn danger small" data-delete-subject="${subject.id}">Delete</button>
