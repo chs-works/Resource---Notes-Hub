@@ -7,6 +7,19 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// Converts binary PDF bytes into a base64 string, in chunks so it doesn't
+// blow the call stack on larger files (String.fromCharCode has an argument
+// limit, so we can't just spread the whole byte array at once).
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
 Deno.serve(async (req) => {
   // ---------------------------------------------------------
   // CORS
@@ -44,16 +57,16 @@ Deno.serve(async (req) => {
     }
 
     // ---------------------------------------------------------
-    // OpenAI API key
+    // Gemini API key
     // ---------------------------------------------------------
-    const openaiKey = Deno.env.get("OPENAI_API_KEY");
+    const geminiKey = Deno.env.get("GEMINI_API_KEY");
 
-    if (!openaiKey) {
-      console.error("OPENAI_API_KEY is missing.");
+    if (!geminiKey) {
+      console.error("GEMINI_API_KEY is missing.");
 
       return new Response(
         JSON.stringify({
-          error: "OPENAI_API_KEY is not configured.",
+          error: "GEMINI_API_KEY is not configured.",
         }),
         {
           status: 500,
@@ -90,6 +103,35 @@ Deno.serve(async (req) => {
     console.log("Question:", question);
 
     // ---------------------------------------------------------
+    // Fetch the PDF and base64-encode it.
+    // Gemini's generateContent accepts inline PDF bytes directly for
+    // files this size — no separate upload step needed.
+    // ---------------------------------------------------------
+    const pdfResponse = await fetch(pdf_url);
+
+    if (!pdfResponse.ok) {
+      console.error("Failed to fetch PDF:", pdfResponse.status);
+
+      return new Response(
+        JSON.stringify({
+          error: "Could not download the teacher PDF.",
+          details:
+            `PDF fetch returned status ${pdfResponse.status}. Make sure the storage bucket serving it is public.`,
+        }),
+        {
+          status: 502,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+    }
+
+    const pdfBuffer = await pdfResponse.arrayBuffer();
+    const pdfBase64 = arrayBufferToBase64(pdfBuffer);
+
+    // ---------------------------------------------------------
     // Prompt
     // ---------------------------------------------------------
     const prompt = `
@@ -118,35 +160,29 @@ ${question}
 `;
 
     // ---------------------------------------------------------
-    // Send PDF + question to OpenAI
+    // Send PDF + question to Gemini
     // ---------------------------------------------------------
-    const openaiResponse = await fetch(
-      "https://api.openai.com/v1/responses",
+    const geminiResponse = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
       {
         method: "POST",
 
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${openaiKey}`,
+          "x-goog-api-key": geminiKey,
         },
 
         body: JSON.stringify({
-          model: "gpt-5.6",
-
-          input: [
+          contents: [
             {
               role: "user",
-
-              content: [
+              parts: [
+                { text: prompt },
                 {
-                  type: "input_text",
-                  text: prompt,
-                },
-
-                {
-                  type: "input_file",
-                  file_url: pdf_url,
-                  detail: "auto",
+                  inline_data: {
+                    mime_type: "application/pdf",
+                    data: pdfBase64,
+                  },
                 },
               ],
             },
@@ -156,24 +192,24 @@ ${question}
     );
 
     // ---------------------------------------------------------
-    // Read OpenAI response
+    // Read Gemini response
     // ---------------------------------------------------------
-    const result = await openaiResponse.json();
+    const result = await geminiResponse.json();
 
-    console.log("OpenAI status:", openaiResponse.status);
+    console.log("Gemini status:", geminiResponse.status);
 
-    if (!openaiResponse.ok) {
-      console.error("OpenAI error:", result);
+    if (!geminiResponse.ok) {
+      console.error("Gemini error:", result);
 
       return new Response(
         JSON.stringify({
-          error: "OpenAI request failed.",
+          error: "Gemini request failed.",
           details:
             result?.error?.message ||
-            "Unknown OpenAI error.",
+            "Unknown Gemini error.",
         }),
         {
-          status: openaiResponse.status,
+          status: geminiResponse.status,
           headers: {
             ...corsHeaders,
             "Content-Type": "application/json",
@@ -185,14 +221,17 @@ ${question}
     // ---------------------------------------------------------
     // Get generated answer
     // ---------------------------------------------------------
-    const answer = result?.output_text;
+    const answer = result?.candidates?.[0]?.content?.parts
+      ?.map((p: { text?: string }) => p.text)
+      .filter(Boolean)
+      .join("\n");
 
     if (!answer) {
-      console.error("No output_text received:", result);
+      console.error("No answer text received:", result);
 
       return new Response(
         JSON.stringify({
-          error: "OpenAI returned no answer.",
+          error: "Gemini returned no answer.",
         }),
         {
           status: 500,

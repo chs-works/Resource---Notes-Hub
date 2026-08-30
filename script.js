@@ -215,6 +215,7 @@ function showProgressPill(subject) {
 }
 
 function showMyStudy(fromHistory) {
+    removeAIWidget();
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = `
         <section class="study-dashboard">
@@ -323,57 +324,100 @@ async function askAI(question, subject, module) {
     return data.answer;
 }
 
-function openAIStudyAssistant(module, subject) {
-    const modal = document.createElement("div");
-    modal.className = "modal-backdrop";
+// ---------------------------------------------------------------------
+// AI Study Assistant — floating bottom-left chat bubble
+//
+// Instead of a button buried inside the Study Tools panel opening a
+// centered modal, this renders a floating action button fixed to the
+// bottom-left of the viewport (only while a module's resources page is
+// open), which toggles a small anchored chat panel above it.
+// ---------------------------------------------------------------------
+function removeAIWidget() {
+    document.getElementById("aiFab")?.remove();
+    document.getElementById("aiPanel")?.remove();
+    document.removeEventListener("click", handleAIOutsideClick, true);
+}
 
-    modal.innerHTML = `
-        <div class="ai-modal">
-            <button class="modal-close" aria-label="Close">✕</button>
+function renderAIFab(module, subject) {
+    removeAIWidget();
 
-            <div class="ai-title">🤖 AI Study Assistant</div>
+    const fab = document.createElement("button");
+    fab.id = "aiFab";
+    fab.className = "ai-fab";
+    fab.type = "button";
+    fab.setAttribute("aria-label", "Open AI Study Assistant");
+    fab.title = "AI Study Assistant";
+    fab.innerHTML = `<span class="ai-fab-icon">🤖</span>`;
 
-            <p class="ai-subtitle">
-                ${subject.name} • ${module.name}
-            </p>
+    fab.addEventListener("click", () => {
+        if (document.getElementById("aiPanel")) {
+            closeAIPanel();
+        } else {
+            openAIPanel(module, subject);
+        }
+    });
 
-            <div class="ai-actions">
-                <button data-action="explain">Explain simply</button>
-                <button data-action="summary">Quick summary</button>
-                <button data-action="questions">Important questions</button>
-            </div>
+    document.body.appendChild(fab);
+}
 
-            <div class="ai-response" id="aiResponse">
-                Choose what you want help with.
-            </div>
+function closeAIPanel() {
+    const panel = document.getElementById("aiPanel");
+    if (!panel) return;
+    panel.classList.remove("open");
+    setTimeout(() => panel.remove(), 200);
+    document.removeEventListener("click", handleAIOutsideClick, true);
+}
 
-            <div class="ai-chat-row">
-                <input
-                    id="aiInput"
-                    placeholder="Ask something about this module..."
-                >
-                <button id="aiSend">Ask</button>
-            </div>
+function handleAIOutsideClick(e) {
+    const panel = document.getElementById("aiPanel");
+    const fab = document.getElementById("aiFab");
+    if (panel && !panel.contains(e.target) && fab && !fab.contains(e.target)) {
+        closeAIPanel();
+    }
+}
 
-            <small class="ai-note">
-                🤖 Answers are generated using the teacher's notes for this module.
-            </small>
+function openAIPanel(module, subject) {
+    document.getElementById("aiPanel")?.remove();
+
+    const panel = document.createElement("div");
+    panel.id = "aiPanel";
+    panel.className = "ai-panel";
+
+    panel.innerHTML = `
+        <div class="ai-panel-header">
+            <div class="ai-panel-title"><span class="ai-panel-emoji">🤖</span> AI Study Assistant</div>
+            <button class="ai-panel-close" type="button" aria-label="Close">✕</button>
         </div>
+        <p class="ai-panel-subtitle">${subject.name} • ${module.name}</p>
+
+        <div class="ai-actions">
+            <button data-action="explain">Explain simply</button>
+            <button data-action="summary">Quick summary</button>
+            <button data-action="questions">Important questions</button>
+        </div>
+
+        <div class="ai-response" id="aiResponse">
+            Choose what you want help with, or ask your own question below.
+        </div>
+
+        <div class="ai-chat-row">
+            <input id="aiInput" placeholder="Ask something about this module...">
+            <button id="aiSend">Ask</button>
+        </div>
+
+        <small class="ai-note">
+            🤖 Answers are generated using the teacher's notes for this module.
+        </small>
     `;
 
-    document.body.appendChild(modal);
+    document.body.appendChild(panel);
+    requestAnimationFrame(() => panel.classList.add("open"));
 
-    const response = modal.querySelector("#aiResponse");
-    const input = modal.querySelector("#aiInput");
-    const sendButton = modal.querySelector("#aiSend");
+    const response = panel.querySelector("#aiResponse");
+    const input = panel.querySelector("#aiInput");
+    const sendButton = panel.querySelector("#aiSend");
 
-    // IMPORTANT:
-    // loadSubjectsFromSupabase() maps teacher_pdf_url -> teacherPdf.
     const pdfUrl = module.teacherPdf;
-
-    console.log("AI module:", module.name);
-    console.log("AI subject:", subject.name);
-    console.log("Teacher PDF:", pdfUrl);
 
     if (!pdfUrl) {
         response.innerHTML = `
@@ -425,7 +469,7 @@ function openAIStudyAssistant(module, subject) {
         }
     };
 
-    modal.querySelectorAll(".ai-actions button").forEach(button => {
+    panel.querySelectorAll(".ai-actions button").forEach(button => {
         button.addEventListener("click", () => {
             const action = button.dataset.action;
             let question = "";
@@ -496,15 +540,10 @@ Focus on topics actually present in the teacher PDF.
         }
     });
 
-    modal.querySelector(".modal-close").addEventListener("click", () => {
-        modal.remove();
-    });
+    panel.querySelector(".ai-panel-close").addEventListener("click", closeAIPanel);
 
-    modal.addEventListener("click", event => {
-        if (event.target === modal) {
-            modal.remove();
-        }
-    });
+    // Defer so the click that opened the panel doesn't immediately close it.
+    setTimeout(() => document.addEventListener("click", handleAIOutsideClick, true), 0);
 }
 
 
@@ -576,6 +615,7 @@ window.addEventListener("popstate", (e) => {
 
 // Simple About page
 function showAbout(fromHistory) {
+    removeAIWidget();
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = `
         <section class="about-card">
@@ -638,6 +678,7 @@ function bindResourceCardFooter(card, shareLink) {
 }
 
 function showSubjects(fromHistory) {
+    removeAIWidget();
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = "";
 
@@ -667,6 +708,7 @@ function showSubjects(fromHistory) {
 }
 
 function showModules(subject, fromHistory) {
+    removeAIWidget();
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = "";
 
@@ -801,11 +843,10 @@ function showResources(module, subject, fromHistory) {
     tools.className = "study-tools";
     tools.innerHTML = `
         <div class="study-tool-head"><div><h3>Study Tools</h3><p>${isCompleted(subject, module) ? "Module completed ✓" : "Mark this module complete when you're done."}</p></div><label class="complete-toggle"><input type="checkbox" ${isCompleted(subject, module) ? "checked" : ""}> Completed</label></div>
-        <div class="study-tool-buttons"><button id="aiBtn">🤖 AI Assistant</button></div>
+        <p class="ai-hint-inline">🤖 Tap the chat bubble in the bottom-left corner to ask the AI Study Assistant about this module.</p>
         <div class="notes-box"><h4>📝 My Personal Notes</h4><textarea id="personalNote" placeholder="Write your own formulas, reminders or important points..."></textarea><button id="savePersonalNote">Save Note</button><span id="noteSaved"></span></div>`;
     subjectListDiv.appendChild(tools);
     tools.querySelector(".complete-toggle input").addEventListener("change", e => { setCompleted(subject, module, e.target.checked); showResources(module, subject, true); });
-    tools.querySelector("#aiBtn").addEventListener("click", () => openAIStudyAssistant(module, subject));
     tools.querySelector("#personalNote").value = getNotes(subject, module);
     tools.querySelector("#savePersonalNote").addEventListener("click", () => { saveNotes(subject, module, tools.querySelector("#personalNote").value); tools.querySelector("#noteSaved").textContent = "Saved ✓"; setTimeout(() => tools.querySelector("#noteSaved").textContent = "", 1500); });
 
@@ -815,9 +856,13 @@ function showResources(module, subject, fromHistory) {
     const videoBookmark = document.createElement("button"); videoBookmark.className = "video-bookmark"; videoBookmark.textContent = isBookmarked(subject, module, "Video") ? "⭐ Saved" : "☆ Save Video";
     videoBookmark.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); toggleBookmark(subject, module, "Video"); videoBookmark.textContent = isBookmarked(subject, module, "Video") ? "⭐ Saved" : "☆ Save Video"; });
     ytBox.appendChild(videoBookmark);
+
+    // Floating AI Study Assistant bubble (bottom-left) for this module.
+    renderAIFab(module, subject);
 }
 
 function showDirectResources(subject, fromHistory) {
+    removeAIWidget();
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = "";
 
