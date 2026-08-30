@@ -282,249 +282,231 @@ function showMyStudy(fromHistory) {
 }
 
 async function askAI(question, subject, module) {
+    // Supabase's teacher_pdf_url is mapped to teacherPdf
+    // inside loadSubjectsFromSupabase().
+    const pdfUrl = module.teacherPdf;
+
+    console.log("========== AI REQUEST ==========");
+    console.log("Subject:", subject.name);
+    console.log("Module:", module.name);
+    console.log("Teacher PDF:", pdfUrl);
+    console.log("Question:", question);
+
+    if (!pdfUrl) {
+        throw new Error("No teacher PDF is attached to this module.");
+    }
+
     const { data, error } = await supabaseClient.functions.invoke(
         "ai-assistant",
         {
             body: {
                 question: question,
                 subject: subject.name,
-                module: module.name
+                module: module.name,
+                pdf_url: pdfUrl
             }
         }
     );
 
+    console.log("AI DATA:", data);
+    console.log("AI ERROR:", error);
+
     if (error) {
         console.error("AI Function Error:", error);
-        throw error;
+        throw new Error(error.message || "AI function failed.");
     }
 
     if (!data || !data.answer) {
-        throw new Error("No answer received from AI.");
+        throw new Error(data?.error || "No answer received from AI.");
     }
 
     return data.answer;
 }
 
-
 function openAIStudyAssistant(module, subject) {
     const modal = document.createElement("div");
-
     modal.className = "modal-backdrop";
 
     modal.innerHTML = `
         <div class="ai-modal">
+            <button class="modal-close" aria-label="Close">✕</button>
 
-            <button class="modal-close" aria-label="Close">
-                ✕
-            </button>
-
-            <div class="ai-title">
-                🤖 AI Study Assistant
-            </div>
+            <div class="ai-title">🤖 AI Study Assistant</div>
 
             <p class="ai-subtitle">
                 ${subject.name} • ${module.name}
             </p>
 
             <div class="ai-actions">
-
-                <button data-action="explain">
-                    Explain simply
-                </button>
-
-                <button data-action="summary">
-                    Quick summary
-                </button>
-
-                <button data-action="questions">
-                    Important questions
-                </button>
-
+                <button data-action="explain">Explain simply</button>
+                <button data-action="summary">Quick summary</button>
+                <button data-action="questions">Important questions</button>
             </div>
 
-            <div class="ai-response">
+            <div class="ai-response" id="aiResponse">
                 Choose what you want help with.
             </div>
 
             <div class="ai-chat-row">
-
                 <input
                     id="aiInput"
                     placeholder="Ask something about this module..."
                 >
-
-                <button id="aiSend">
-                    Ask
-                </button>
-
+                <button id="aiSend">Ask</button>
             </div>
 
             <small class="ai-note">
-                🤖 AI Study Assistant
+                🤖 Answers are generated using the teacher's notes for this module.
             </small>
-
         </div>
     `;
 
     document.body.appendChild(modal);
 
-    const response = modal.querySelector(".ai-response");
+    const response = modal.querySelector("#aiResponse");
     const input = modal.querySelector("#aiInput");
     const sendButton = modal.querySelector("#aiSend");
 
+    // IMPORTANT:
+    // loadSubjectsFromSupabase() maps teacher_pdf_url -> teacherPdf.
+    const pdfUrl = module.teacherPdf;
 
-    // Show AI response
-    const showAIResponse = async (question) => {
+    console.log("AI module:", module.name);
+    console.log("AI subject:", subject.name);
+    console.log("Teacher PDF:", pdfUrl);
 
+    if (!pdfUrl) {
         response.innerHTML = `
-            <div class="ai-loading">
-                🤔 Thinking...
+            <div class="ai-error">
+                ❌ No teacher PDF is attached to this module.
+                <br><br>
+                Add the PDF URL to the <b>teacher_pdf_url</b> column in Supabase.
             </div>
         `;
+    }
 
-        try {
+    const showAIResponse = async (question) => {
+        if (!question || !question.trim()) return;
 
-            const answer = await askAI(
-                question,
-                subject,
-                module
-            );
-
-            response.innerHTML = answer;
-
-        } catch (error) {
-
-            console.error(error);
-
+        if (!pdfUrl) {
             response.innerHTML = `
                 <div class="ai-error">
-                    ❌ Unable to get an AI response.
-                    <br><br>
-                    Please try again.
+                    ❌ This module does not have a teacher PDF.
                 </div>
             `;
-        }
-    };
-
-
-    // Quick action buttons
-    modal
-        .querySelectorAll(".ai-actions button")
-        .forEach(button => {
-
-            button.addEventListener("click", () => {
-
-                const action = button.dataset.action;
-
-                let question = "";
-
-                if (action === "explain") {
-
-                    question = `
-                    Explain the module "${module.name}"
-                    from "${subject.name}" in very simple
-                    student-friendly language.
-
-                    Give:
-                    1. Basic idea
-                    2. Important concepts
-                    3. Simple examples
-                    4. Important points for exams
-                    `;
-
-                }
-
-                else if (action === "summary") {
-
-                    question = `
-                    Give me a concise study summary
-                    of "${module.name}" from
-                    "${subject.name}".
-
-                    Include the most important
-                    concepts, definitions, formulas
-                    and exam points.
-                    `;
-
-                }
-
-                else if (action === "questions") {
-
-                    question = `
-                    Create important exam questions
-                    for "${module.name}" from
-                    "${subject.name}".
-
-                    Include:
-                    - Short-answer questions
-                    - Long-answer questions
-                    - Important concepts
-                    - Important problems if applicable
-                    `;
-
-                }
-
-                showAIResponse(question);
-
-            });
-
-        });
-
-
-    // Ask custom question
-    const askQuestion = () => {
-
-        const question = input.value.trim();
-
-        if (!question) {
             return;
         }
 
-        input.value = "";
+        response.innerHTML = `
+            <div class="ai-loading">
+                🤖 Reading the teacher notes...
+                <br><br>
+                Thinking about your question...
+            </div>
+        `;
 
-        showAIResponse(question);
+        sendButton.disabled = true;
 
+        try {
+            const answer = await askAI(question, subject, module);
+            response.innerHTML = answer;
+        } catch (error) {
+            console.error("AI Assistant Error:", error);
+
+            response.innerHTML = `
+                <div class="ai-error">
+                    ❌ AI request failed.
+                    <br><br>
+                    <small>${error.message || "Unknown error"}</small>
+                </div>
+            `;
+        } finally {
+            sendButton.disabled = false;
+        }
     };
 
+    modal.querySelectorAll(".ai-actions button").forEach(button => {
+        button.addEventListener("click", () => {
+            const action = button.dataset.action;
+            let question = "";
 
-    sendButton.addEventListener(
-        "click",
-        askQuestion
-    );
+            if (action === "explain") {
+                question = `
+Explain "${module.name}" from the teacher's notes for "${subject.name}".
 
+Explain it in very simple, student-friendly language.
 
-    input.addEventListener(
-        "keydown",
-        event => {
+Include:
+1. Basic idea
+2. Important concepts
+3. Important definitions
+4. Formulas if present
+5. Simple examples
+6. Important exam points
 
-            if (event.key === "Enter") {
-                askQuestion();
+Only use information from the attached teacher PDF.
+                `;
+            } else if (action === "summary") {
+                question = `
+Give me a concise study summary of "${module.name}" using the attached teacher notes.
+
+Include:
+- Important concepts
+- Definitions
+- Formulas
+- Key examples
+- Important exam points
+
+Do not invent information not present in the PDF.
+                `;
+            } else if (action === "questions") {
+                question = `
+Create important exam questions for "${module.name}" using only the attached teacher notes.
+
+Include:
+- Short-answer questions
+- Long-answer questions
+- Important concepts
+- Important definitions
+- Important problems
+- Formula-based questions when applicable
+
+Focus on topics actually present in the teacher PDF.
+                `;
             }
 
-        }
-    );
-
-
-    // Close modal
-    modal
-        .querySelector(".modal-close")
-        .addEventListener("click", () => {
-
-            modal.remove();
-
+            showAIResponse(question);
         });
+    });
 
+    const askQuestion = () => {
+        const question = input.value.trim();
+        if (!question) return;
 
-    // Close when clicking outside
+        input.value = "";
+        showAIResponse(question);
+    };
+
+    sendButton.addEventListener("click", askQuestion);
+
+    input.addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            askQuestion();
+        }
+    });
+
+    modal.querySelector(".modal-close").addEventListener("click", () => {
+        modal.remove();
+    });
+
     modal.addEventListener("click", event => {
-
         if (event.target === modal) {
             modal.remove();
         }
-
     });
-
 }
+
 
 function addBookmarkButton(card, subject, module, type) {
     const footer = card.querySelector(".resource-footer");
