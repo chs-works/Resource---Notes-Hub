@@ -304,6 +304,7 @@ async function askAI(question, subject, module) {
                 question: question,
                 subject: subject.name,
                 module: module.name,
+                module_id: module.id,
                 pdf_url: pdfUrl
             }
         }

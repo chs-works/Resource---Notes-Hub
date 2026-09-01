@@ -119,6 +119,22 @@ async function uploadFile(file, folder) {
 }
 
 // ---------------------------------------------------------------------
+// Fire-and-forget: tells the ai-assistant edge function to upload this
+// module's teacher PDF to Gemini right now, so the file is already
+// cached with Gemini by the time any student opens the AI assistant.
+// Doesn't block the UI — the Save button doesn't wait on this.
+// ---------------------------------------------------------------------
+function preloadAIFile(moduleId, pdfUrl) {
+    if (!moduleId || !pdfUrl) return;
+    supabaseClient.functions.invoke("ai-assistant", {
+        body: { preload: true, module_id: moduleId, pdf_url: pdfUrl }
+    }).then(({ data, error }) => {
+        if (error) console.warn("AI preload failed for module", moduleId, error);
+        else console.log("AI preload done for module", moduleId, data);
+    });
+}
+
+// ---------------------------------------------------------------------
 // Load + render dashboard
 // ---------------------------------------------------------------------
 async function loadDashboard() {
@@ -376,6 +392,13 @@ function openAddModuleForm(subjectId) {
                 await supabaseClient.from("modules").update(updates).eq("id", mod.id);
             }
 
+            // Warm the Gemini file cache in the background so the first
+            // student question on this module doesn't have to wait for
+            // the PDF download + upload to Gemini.
+            if (updates.teacher_pdf_url) {
+                preloadAIFile(mod.id, updates.teacher_pdf_url);
+            }
+
             loadDashboard();
         } catch (err) {
             status.textContent = "Error: " + err.message;
@@ -436,6 +459,14 @@ function openEditModuleForm(moduleId, subjectId) {
 
             const { error } = await supabaseClient.from("modules").update(updates).eq("id", moduleId);
             if (error) throw error;
+
+            // Warm the Gemini file cache in the background whenever the
+            // teacher PDF was replaced, so the next student question
+            // doesn't pay the upload cost live.
+            if (updates.teacher_pdf_url) {
+                preloadAIFile(moduleId, updates.teacher_pdf_url);
+            }
+
             loadDashboard();
         } catch (err) {
             status.textContent = "Error: " + err.message;
