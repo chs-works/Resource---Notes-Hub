@@ -8,19 +8,23 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="32x32" href="icons/app-icon/logo-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="icons/app-icon/logo-16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="icons/app-icon/logo-180.png">
-    <meta name="theme-color" content="#7C6FE0">
+    <meta name="theme-color" content="#7357FF">
+    <meta name="color-scheme" content="light dark">
 </head>
 
 <body>
+    <canvas id="bgCanvas" aria-hidden="true"></canvas>
     <nav class="navbar">
         <div class="menu-toggle" id="menuToggle">☰</div>
-        <div class="nav-title">Notes Hub</div>
+        <div class="nav-title">RESOURCE HUB</div>
         <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to dark mode"
             title="Switch to dark mode">🌙</button>
     </nav>
@@ -37,11 +41,21 @@
 
     <div class="overlay" id="overlay"></div>
 
-    <header>
-        <img src="icons/books.png" width="100" height="100">
-        <h1> Resource Hub</h1>
-        <p>(for 3rd Sem)</p>
-        <p>Quick access to notes, revision material, and videos</p>
+    <header class="premium-hero">
+        <div class="hero-orb hero-orb-one"></div>
+        <div class="hero-orb hero-orb-two"></div>
+        <div class="hero-content">
+            <div class="hero-badge"><span class="hero-status-dot"></span> 3rd Semester • Student Edition</div>
+            <div class="hero-icon-wrap"><img src="icons/books.png" width="82" height="82" alt="Resource Hub"></div>
+            <h1>Study smarter.<br><span>Everything in one place.</span></h1>
+            <p class="hero-copy">A beautifully organized home for your notes, revision material, videos, syllabus and
+                AI-powered study help.</p>
+            <div class="hero-pills">
+                <span>✦ Curated Resources</span>
+                <span>◉ AI Study Assistant</span>
+                <span>↗ Track Progress</span>
+            </div>
+        </div>
     </header>
 
     <main>
@@ -55,6 +69,7 @@
          live from Supabase) — keep the file in the repo as a backup/reference
          if you like, just don't load it here. -->
     <script src="script.js"></script>
+    <script src="background.js"></script>
     <footer class="site-footer">
         <p>© 2026 Notes / Resource Hub — Built by CHS • All rights reserved</p>
     </footer>

@@ -880,7 +880,7 @@ function showResources(module, subject, fromHistory) {
 
     // Teacher's PDF box
     const teacherBox = document.createElement("div");
-    teacherBox.className = "resource-card";
+    teacherBox.className = "resource-card teacher-notes-card";
     teacherBox.innerHTML = `
     <div class="resource-main">
         <div class="subject-icon">📄</div>
@@ -898,7 +898,7 @@ function showResources(module, subject, fromHistory) {
     bindResourceCardFooter(teacherBox, module.teacherPdf);
 
     const aiBox = document.createElement("div");
-    aiBox.className = "resource-card";
+    aiBox.className = "resource-card quick-revision-card";
     aiBox.innerHTML = `
     <div class="resource-main">
         <div class="subject-icon">⚡</div>
