@@ -15,6 +15,14 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 // gets filled in by loadSubjectsFromSupabase() before the app renders.
 let subjects = [];
 
+// The browser's default scroll restoration tries to guess where you were
+// scrolled to and silently jumps there on back/forward — which is exactly
+// what causes "back button lands me mid-page" instead of at the top. We
+// take full manual control of scroll position instead (see scrollToTop()).
+if ("scrollRestoration" in history) {
+    history.scrollRestoration = "manual";
+}
+
 const subjectListDiv = document.getElementById("subject-list");
 const pageHeaderDiv = document.getElementById("page-header");
 // Side menu logic
@@ -79,11 +87,13 @@ if (studyLink) {
 menuToggle.addEventListener("click", () => {
     sideMenu.classList.add("open");
     overlay.classList.add("active");
+    document.body.classList.add("menu-open");
 });
 
 function closeSideMenu() {
     sideMenu.classList.remove("open");
     overlay.classList.remove("active");
+    document.body.classList.remove("menu-open");
 }
 closeMenu.addEventListener("click", closeSideMenu);
 overlay.addEventListener("click", closeSideMenu);
@@ -215,6 +225,7 @@ function showProgressPill(subject) {
 }
 
 function showMyStudy(fromHistory) {
+    scrollToContentTop();
     removeAIWidget();
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = `
@@ -280,6 +291,7 @@ function showMyStudy(fromHistory) {
     }));
 
     if (!fromHistory) history.pushState({ view: "study" }, "", "#study");
+    playViewTransition();
 }
 
 async function askAI(question, subject, module) {
@@ -643,6 +655,38 @@ function addBookmarkButton(card, subject, module, type) {
 }
 
 // ---------------------------------------------------------------------
+// Scroll + transition helpers
+//
+// Every navigation — a forward tap on a card, OR the phone's back button
+// — should land at the very top of the page (right below the hero) and
+// fade the new content in smoothly, instead of keeping whatever scroll
+// position the previous screen happened to be at.
+// ---------------------------------------------------------------------
+function scrollToTop() {
+    window.scrollTo(0, 0);
+}
+
+// Scrolls to the top of <main>, skipping the hero header — used for every
+// "inner" view so drilling into modules/resources doesn't re-show the
+// full hero each time. Only "Back to Subjects" (showSubjects) uses the
+// plain scrollToTop() above.
+function scrollToContentTop() {
+    const main = document.querySelector("main");
+    if (!main) { scrollToTop(); return; }
+    const top = main.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo(0, top);
+}
+
+function playViewTransition() {
+    subjectListDiv.classList.remove("view-fade");
+    // Force a reflow so the animation restarts even when navigating
+    // between two views that don't change the class name meaningfully
+    // (e.g. module -> module).
+    void subjectListDiv.offsetWidth;
+    subjectListDiv.classList.add("view-fade");
+}
+
+// ---------------------------------------------------------------------
 // History / back-button handling
 //
 // The app is a single HTML page that just swaps innerHTML around, so by
@@ -702,6 +746,7 @@ window.addEventListener("popstate", (e) => {
 
 // Simple About page
 function showAbout(fromHistory) {
+    scrollToContentTop();
     removeAIWidget();
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = `
@@ -735,6 +780,7 @@ function showAbout(fromHistory) {
     if (!fromHistory) {
         history.pushState({ view: "about" }, "", "#about");
     }
+    playViewTransition();
 }
 
 // Reusable: prevents footer button clicks (download/share) from also triggering
@@ -765,6 +811,7 @@ function bindResourceCardFooter(card, shareLink) {
 }
 
 function showSubjects(fromHistory) {
+    scrollToTop();
     removeAIWidget();
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = "";
@@ -779,7 +826,7 @@ function showSubjects(fromHistory) {
         const icon = subject.icon || "📚";
         const isImage = typeof icon === "string" && (icon.endsWith('.png') || icon.endsWith('.jpg') || icon.endsWith('.jpeg') || icon.endsWith('.svg') || icon.endsWith('.webp'));
         subjectCard.innerHTML = `
-            <div class="subject-icon">${isImage ? `<img src="${icon}" alt="${subject.name}" style="width:60px;height:60px;object-fit:contain;">` : icon}</div>
+            <div class="subject-icon${isImage ? " has-image-icon" : ""}">${isImage ? `<img src="${icon}" alt="${subject.name}">` : icon}</div>
             <div class="subject-name">${subject.name}</div>
             ${subject.direct ? "" : showProgressPill(subject)}
         `;
@@ -792,9 +839,11 @@ function showSubjects(fromHistory) {
         });
         subjectListDiv.appendChild(subjectCard);
     });
+    playViewTransition();
 }
 
 function showModules(subject, fromHistory) {
+    scrollToContentTop();
     removeAIWidget();
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = "";
@@ -854,9 +903,11 @@ function showModules(subject, fromHistory) {
         });
         subjectListDiv.appendChild(moduleCard);
     });
+    playViewTransition();
 }
 
 function showResources(module, subject, fromHistory) {
+    scrollToContentTop();
     pageHeaderDiv.innerHTML = "";
 
     if (!fromHistory) recordRecentlyViewed(subject, module);
@@ -899,7 +950,8 @@ function showResources(module, subject, fromHistory) {
 
     const aiBox = document.createElement("div");
     aiBox.className = "resource-card quick-revision-card";
-    aiBox.innerHTML = `
+    if (module.aiNotesPdf) {
+        aiBox.innerHTML = `
     <div class="resource-main">
         <div class="subject-icon">⚡</div>
         <div class="subject-name">Quick Revision Notes</div>
@@ -909,20 +961,40 @@ function showResources(module, subject, fromHistory) {
         <button class="footer-btn share-btn" title="Share" data-link="${module.aiNotesPdf}">📤</button>
     </div>
 `;
-    aiBox.addEventListener("click", () => {
-        window.open(module.aiNotesPdf, "_blank");
-    });
-    subjectListDiv.appendChild(aiBox);
-    bindResourceCardFooter(aiBox, module.aiNotesPdf);
+        aiBox.addEventListener("click", () => {
+            window.open(module.aiNotesPdf, "_blank");
+        });
+        subjectListDiv.appendChild(aiBox);
+        bindResourceCardFooter(aiBox, module.aiNotesPdf);
+    } else {
+        aiBox.classList.add("resource-disabled");
+        aiBox.innerHTML = `
+    <div class="resource-main">
+        <div class="subject-icon">⚡</div>
+        <div class="subject-name">Quick Revision Notes (not added)</div>
+    </div>
+`;
+        subjectListDiv.appendChild(aiBox);
+    }
 
     const ytBox = document.createElement("a");
-    ytBox.href = module.youtubeLink;
-    ytBox.target = "_blank";
     ytBox.className = "subject-card";
-    ytBox.innerHTML = `
+    if (module.youtubeLink) {
+        ytBox.href = module.youtubeLink;
+        ytBox.target = "_blank";
+        ytBox.innerHTML = `
         <div class="subject-icon">▶️</div>
         <div class="subject-name">Watch Video</div>
     `;
+    } else {
+        ytBox.href = "#";
+        ytBox.classList.add("resource-disabled");
+        ytBox.addEventListener("click", e => e.preventDefault());
+        ytBox.innerHTML = `
+        <div class="subject-icon">▶️</div>
+        <div class="subject-name">Watch Video (not added)</div>
+    `;
+    }
     subjectListDiv.appendChild(ytBox);
 
     // Study tools panel
@@ -940,15 +1012,19 @@ function showResources(module, subject, fromHistory) {
     addBookmarkButton(teacherBox, subject, module, "Teacher's Notes");
     addBookmarkButton(aiBox, subject, module, "Quick Revision Notes");
     // video bookmark is represented by the card itself; add a simple local bookmark below the link
-    const videoBookmark = document.createElement("button"); videoBookmark.className = "video-bookmark"; videoBookmark.textContent = isBookmarked(subject, module, "Video") ? "⭐ Saved" : "☆ Save Video";
-    videoBookmark.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); toggleBookmark(subject, module, "Video"); videoBookmark.textContent = isBookmarked(subject, module, "Video") ? "⭐ Saved" : "☆ Save Video"; });
-    ytBox.appendChild(videoBookmark);
+    if (module.youtubeLink) {
+        const videoBookmark = document.createElement("button"); videoBookmark.className = "video-bookmark"; videoBookmark.textContent = isBookmarked(subject, module, "Video") ? "⭐ Saved" : "☆ Save Video";
+        videoBookmark.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); toggleBookmark(subject, module, "Video"); videoBookmark.textContent = isBookmarked(subject, module, "Video") ? "⭐ Saved" : "☆ Save Video"; });
+        ytBox.appendChild(videoBookmark);
+    }
 
     // Floating AI Study Assistant bubble (bottom-left) for this module.
     renderAIFab(module, subject);
+    playViewTransition();
 }
 
 function showDirectResources(subject, fromHistory) {
+    scrollToContentTop();
     removeAIWidget();
     pageHeaderDiv.innerHTML = "";
     subjectListDiv.innerHTML = "";
@@ -988,6 +1064,7 @@ function showDirectResources(subject, fromHistory) {
         subjectListDiv.appendChild(box);
         bindResourceCardFooter(box, item.file);
     });
+    playViewTransition();
 }
 
 // ---------------------------------------------------------------------

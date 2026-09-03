@@ -231,14 +231,6 @@ main {
     filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.1));
 }
 
-.subject-icon img {
-    filter: drop-shadow(0 0 4px rgba(255, 255, 255, .85)) drop-shadow(0 0 10px rgba(255, 255, 255, .45));
-}
-
-body.dark-mode .subject-icon img {
-    filter: drop-shadow(0 0 5px rgba(255, 255, 255, .9)) drop-shadow(0 0 16px rgba(138, 115, 255, .6));
-}
-
 .subject-name {
     font-size: 15px;
     text-align: center;
@@ -323,7 +315,7 @@ body.dark-mode .subject-icon img {
 .side-menu {
     position: fixed;
     top: 0;
-    left: -280px;
+    left: 0;
     width: 260px;
     height: 100%;
     background: var(--surface-strong);
@@ -335,12 +327,17 @@ body.dark-mode .subject-icon img {
     display: flex;
     flex-direction: column;
     gap: 18px;
-    transition: left 0.3s ease;
+    /* transform (not left/position) is compositor-only, so this stays
+       smooth even on slower phones instead of re-triggering layout on
+       every animation frame. */
+    transform: translateX(-100%);
+    transition: transform 0.32s cubic-bezier(.22, .9, .32, 1);
+    will-change: transform;
     z-index: 100;
 }
 
 .side-menu.open {
-    left: 0;
+    transform: translateX(0);
 }
 
 .side-menu a {
@@ -366,7 +363,6 @@ body.dark-mode .subject-icon img {
 }
 
 .overlay {
-    display: none;
     position: fixed;
     top: 0;
     left: 0;
@@ -375,10 +371,21 @@ body.dark-mode .subject-icon img {
     background: rgba(9, 12, 20, 0.35);
     backdrop-filter: blur(2px);
     z-index: 99;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
 }
 
 .overlay.active {
-    display: block;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Stop the background page from scrolling underneath the open menu —
+   scroll-chaining onto the body is one of the main things that makes a
+   slide-out menu feel janky on mobile. */
+body.menu-open {
+    overflow: hidden;
 }
 
 /* Footer */
@@ -404,6 +411,46 @@ body.dark-mode .subject-icon img {
 
 .subject-card.long-name .subject-name {
     font-size: 0.85em;
+}
+
+/* Shown on Quick Revision Notes / Watch Video cards when a module simply
+   doesn't have that resource attached yet, instead of silently opening
+   a broken link. */
+.resource-disabled {
+    opacity: .5;
+    pointer-events: none;
+    cursor: default;
+}
+
+/* ------------------------------------------------------------------
+   Subject icon badge — for uploaded custom icon images (not emoji).
+   Uploaded icons come in whatever color/weight the admin picked, and
+   dark line-art was disappearing against dark cards. Fix: force every
+   uploaded icon to a pure white silhouette (filter below), sitting on
+   a small branded gradient chip. Contrast is guaranteed regardless of
+   the source icon's original color, and it looks the same in light
+   or dark mode since the chip supplies the color, not the card.
+   ------------------------------------------------------------------ */
+.subject-icon.has-image-icon {
+    width: 74px;
+    height: 74px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(145deg, var(--accent), var(--accent-warm));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 8px 22px var(--accent-soft);
+    flex-shrink: 0;
+}
+
+.subject-icon.has-image-icon img {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    /* Collapses any source colors to solid black, then flips to solid
+       white — works whether the uploaded icon was black line art,
+       colored, or anything in between. */
+    filter: brightness(0) invert(1);
 }
 
 /* Syllabus card - full-width rectangle, distinct from square module/resource cards */
@@ -2129,4 +2176,70 @@ body::before {
 .quick-revision-card .bookmark-btn {
     flex: 1 1 0 !important;
     width: 33.333% !important;
+}
+
+/* ================================================================
+   MOBILE SMOOTHNESS PASS
+   - Immediate, visible tap feedback on cards (the JS already adds
+     a .tapped class on touchstart, it just had no matching style).
+   - Removes the default gray/blue tap-highlight flash mobile browsers
+     draw on tap, which looks like lag on top of our own animation.
+   - touch-action: manipulation removes the ~300ms tap delay some
+     mobile browsers add while waiting to see if it's a double-tap.
+   - .view-fade gives every screen change (forward tap OR back button)
+     a quick, consistent entrance instead of an abrupt content swap.
+   ================================================================ */
+
+.subject-card,
+.resource-card,
+.back-btn,
+.footer-btn,
+.theme-toggle,
+.menu-toggle,
+.side-menu a,
+.bookmark-row,
+.study-tool-buttons button,
+.ai-fab,
+.ai-panel-close,
+.complete-check,
+.complete-toggle {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+.subject-card,
+.resource-card {
+    will-change: transform;
+}
+
+.subject-card.tapped,
+.resource-card.tapped {
+    transform: scale(.96) !important;
+    transition: transform .12s ease !important;
+}
+
+.back-btn.tapped {
+    transform: scale(.93);
+}
+
+@keyframes viewFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.view-fade {
+    animation: viewFadeIn .3s cubic-bezier(.22, .9, .32, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .view-fade {
+        animation: none;
+    }
 }
